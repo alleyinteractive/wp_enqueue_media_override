@@ -445,6 +445,34 @@ function wemo_check_has_media( $post_id ) {
 add_action( 'add_attachment', 'wemo_check_has_media' );
 add_action( 'delete_attachment', 'wemo_check_has_media' );
 
+function wemo_check_media_months( $post_id ) {
+
+	// What month/year is the most recent attachment?
+	global $wpdb;
+	$months = $wpdb->get_results( $wpdb->prepare( "
+			SELECT DISTINCT YEAR( post_date ) AS year, MONTH( post_date ) AS month
+			FROM $wpdb->posts
+			WHERE post_type = %s
+			ORDER BY post_date DESC
+			LIMIT 1
+		", 'attachment' ) );
+
+	// Simplify by assigning the object to $months
+	$months = array_shift( array_values( $months ) );
+
+	// Compare the dates of the new, and most recent, attachment
+	if (
+		! $months->year == get_the_time( 'Y', $post_id ) &&
+		! $months->month == get_the_time( 'm', $post_id )
+	) {
+		// the new attachment is not in the same month/year as the
+		// most recent attachment, so we need to refresh the transient
+		delete_transient('media_months');
+	}
+
+}
+add_action( 'add_attachment', 'wemo_check_media_months' );
+
 function wemo_maybe_enqueue_media() {
 	if ( isset( $_GET['post'] ) ) {
 	 	$post_id = (int) $_GET['post'];
