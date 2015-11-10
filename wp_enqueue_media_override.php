@@ -103,9 +103,30 @@ function wemo_wp_enqueue_media( $args = array() ) {
 		}
 	}
 
-	// Cache these expensive queries
-	$has_audio = wemo_media_has_audio();
-	$has_video = wemo_media_has_video();
+	// Get mime types
+	$mime_types = wp_get_mime_types();
+
+	// Get audio mime types and query for them
+	$audio_mime_types = preg_grep( '/audio*/', $mime_types );
+	$audio_mime_types = array_values( $audio_mime_types );
+	$has_audio = $wpdb->get_var( "
+		SELECT ID
+		FROM $wpdb->posts
+		WHERE post_type = 'attachment'
+		AND post_mime_type IN ('" . implode( "', '", esc_sql( $audio_mime_types ) ) . "')
+		LIMIT 1
+	" );
+
+	// Get video mime types and query for them
+	$video_mime_types = preg_grep( '/video*/', $mime_types );
+	$video_mime_types = array_values($video_mime_types);
+	$has_video = $wpdb->get_var( "
+		SELECT ID
+		FROM $wpdb->posts
+		WHERE post_type = 'attachment'
+		AND post_mime_type IN ('" . implode( "', '", esc_sql( $video_mime_types ) ) . "')
+		LIMIT 1
+	" );
 
 	$settings = array(
 		'tabs'      => $tabs,
@@ -328,64 +349,6 @@ function wemo_wp_enqueue_media( $args = array() ) {
 }
 
 /**
- * Check if there are any audio items in the media library.
- *
- * Queries the DB to check whether the media library contains any items of type audio,
- * and caches that expensive query to avoid slowness when saving posts on large sites.
- *
- * @return int Returns 1 or 0 for 'yes' or 'no'
- */
-function wemo_media_has_audio() {
-	$has_audio = apply_filters( 'wemo_media_has_audio', null );
-	if ( null === $has_audio ) {
-		$has_audio = get_transient( 'has_audio' );
-		if ( false === $has_audio ) {
-			global $wpdb;
-			$has_audio = $wpdb->get_var( "
-				SELECT ID
-				FROM $wpdb->posts
-				WHERE post_type = 'attachment'
-				AND post_mime_type LIKE 'audio%'
-				LIMIT 1
-			" );
-			$has_audio = $has_audio ? 1 : 0;
-			set_transient( 'has_audio', $has_audio );
-		}
-	}
-
-	return $has_audio;
-}
-
-/**
- * Check if there are any video items in the media library.
- *
- * Queries the DB to check whether the media library contains any items of type video,
- * and caches that expensive query to avoid slowness when saving posts on large sites.
- *
- * @return int Returns 1 or 0 for 'yes' or 'no'
- */
-function wemo_media_has_video() {
-	$has_video = apply_filters( 'wemo_media_has_video', null );
-	if ( null === $has_video ) {
-		$has_video = get_transient( 'has_video' );
-		if ( false === $has_video ) {
-			global $wpdb;
-			$has_video = $wpdb->get_var( "
-				SELECT ID
-				FROM $wpdb->posts
-				WHERE post_type = 'attachment'
-				AND post_mime_type LIKE 'video%'
-				LIMIT 1
-			" );
-			$has_video = $has_video ? 1 : 0;
-			set_transient( 'has_video', $has_video );
-		}
-	}
-
-	return $has_video;
-}
-
-/**
  * Gets a list of months in which media has been uploaded
  *
  * Queries the DB to check in which months media items have been uploaded, then
@@ -411,39 +374,6 @@ function wemo_get_media_months() {
 
 	return $media_months;
 }
-
-/**
- * Updates the has_audio and has_video transients as required
- *
- * Hooks into `add_attachment` and `delete_attachment` to determine whether or not
- * the has_audio and has_video transients needs to be refreshed.
- *
- * @param $post_id ID of the attachment post added/deleted
- */
-function wemo_check_has_media( $post_id ) {
-	$mime_type = get_post_mime_type( $post_id );
-	$post_status = get_post_status( $post_id );
-
-	// The value of the transient we should clear, where relevant.
-	$transient_to_clear = null;
-	if ( 'trash' == $post_status ) {
-		// We're deleting an attachment so we should only refresh the transient
-		// if it indicates there are attachments of this type
-		$transient_to_clear = 1;
-	} else {
-		// We're adding an attachment so we should only refresh the transient
-		// if it indicates there are currently no attachments of this type
-		$transient_to_clear = 0;
-	}
-	// Based on attachment type, clear the relevant transient where necessary
-	if ( 'image' == $mime_type && media_has_audio() === $transient_to_clear ){
-		delete_transient( 'has_audio' );
-	} elseif ( 'video' == $mime_type && media_has_video() === $transient_to_clear ) {
-		delete_transient( 'has_video' );
-	}
-}
-add_action( 'add_attachment', 'wemo_check_has_media' );
-add_action( 'delete_attachment', 'wemo_check_has_media' );
 
 function wemo_check_media_months( $post_id ) {
 
