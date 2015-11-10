@@ -177,6 +177,12 @@ function wemo_wp_enqueue_media( $args = array() ) {
 
 	$hier = $post && is_post_type_hierarchical( $post->post_type );
 
+	if ( $post ) {
+		$post_type_object = get_post_type_object( $post->post_type );
+	} else {
+		$post_type_object = get_post_type_object( 'post' );
+	}
+
 	$strings = array(
 		// Generic
 		'url'         => __( 'URL' ),
@@ -235,8 +241,8 @@ function wemo_wp_enqueue_media( $args = array() ) {
 		'insertFromUrlTitle' => __( 'Insert from URL' ),
 
 		// Featured Images
-		'setFeaturedImageTitle' => __( 'Set Featured Image' ),
-		'setFeaturedImage'    => __( 'Set featured image' ),
+		'setFeaturedImageTitle' => $post_type_object->labels->featured_image,
+		'setFeaturedImage'    => $post_type_object->labels->set_featured_image,
 
 		// Gallery
 		'createGalleryTitle' => __( 'Create Gallery' ),
@@ -357,19 +363,26 @@ function wemo_wp_enqueue_media( $args = array() ) {
  * @return array An array of objects representing rows from the DB query
  */
 function wemo_get_media_months() {
+	global $wp_locale;
+
 	$media_months = apply_filters( 'wemo_get_media_months', null );
 	if ( null === $media_months ) {
-		$months = get_transient( 'media_months' );
-		if ( false === $months ) {
+		$media_months = get_transient( 'media_months' );
+		if ( false === $media_months ) {
 			global $wpdb;
-			$months = $wpdb->get_results( $wpdb->prepare( "
+			$media_months = $wpdb->get_results( $wpdb->prepare( "
 				SELECT DISTINCT YEAR( post_date ) AS year, MONTH( post_date ) AS month
 				FROM $wpdb->posts
 				WHERE post_type = %s
 				ORDER BY post_date DESC
 			", 'attachment' ) );
-			set_transient( 'media_months', $months );
+
+			set_transient( 'media_months', $media_months );
 		}
+	}
+
+	foreach ( $media_months as $month_year ) {
+		$month_year->text = sprintf( __( '%1$s %2$d' ), $wp_locale->get_month( $month_year->month ), $month_year->year );
 	}
 
 	return $media_months;
